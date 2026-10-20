@@ -42,7 +42,7 @@ there revokes access (Home Assistant will then ask you to sign in again).
 |---|---|
 | `binary_sensor.<name>_ring` | Turns **on for 15 s** when the button is pressed |
 | `binary_sensor.<name>_motion` | Pulses on motion / person events (if enabled in the Qubo app) |
-| `image.<name>_last_visitor` | Snapshot of the most recent visitor |
+| `image.<name>_last_visitor` | Photo of the most recent visitor — downloaded and stored locally (`config/qubo_doorbell/`), so it survives link expiry and restarts until the next ring replaces it |
 | `sensor.<name>_last_event` | The latest raw event (`service / event`) with parameters as attributes — handy for debugging |
 
 Every real-time event is also fired on the Home Assistant bus as **`qubo_event`**, so you can trigger
@@ -65,6 +65,7 @@ adds the visitor photo a few seconds later.
 ## Privacy & security
 - Your Qubo email/password are stored in Home Assistant's config entry (like other cloud integrations) and are
   sent only to Qubo's servers by qubopy.
+- The last visitor photo is saved in `config/qubo_doorbell/` (not in `www`, so it is not publicly served).
 - Snapshot links are pre-signed, expiring URLs from Qubo's storage. Anyone holding a link can open it until it
   expires — don't post them publicly.
 - The integration only subscribes to Qubo's `monitor` MQTT topics (no control channel).
