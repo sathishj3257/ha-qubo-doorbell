@@ -18,15 +18,21 @@ from .const import (
     CONF_HISTORY_ENABLED,
     CONF_HISTORY_FOLDER,
     CONF_HISTORY_MAX_MB,
+    CONF_MOTION_SNAPSHOTS,
+    CONF_VIDEO_ENABLED,
+    CONF_VIDEO_MAX_MB,
     DEFAULT_HISTORY_ENABLED,
     DEFAULT_HISTORY_FOLDER,
     DEFAULT_HISTORY_MAX_MB,
+    DEFAULT_MOTION_SNAPSHOTS,
+    DEFAULT_VIDEO_ENABLED,
+    DEFAULT_VIDEO_MAX_MB,
     DOMAIN,
     SIGNAL_EVENT,
     SIGNAL_HISTORY,
 )
 from .entity import QuboEntity, is_camera_like
-from .history import media_root, scan, valid_folder
+from .history import media_root, scan_all, valid_folder
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
@@ -72,7 +78,7 @@ class QuboLastEventSensor(QuboEntity, SensorEntity):
 
 
 class QuboHistorySensor(QuboEntity, SensorEntity):
-    """Number of photos kept in the snapshot history (size and settings as attributes)."""
+    """Number of photos kept in the snapshot history (clips, sizes and settings as attributes)."""
 
     _attr_name = "Snapshot history"
     _attr_icon = "mdi:image-multiple-outline"
@@ -84,37 +90,45 @@ class QuboHistorySensor(QuboEntity, SensorEntity):
         self._attr_unique_id = f"{entry.entry_id}_snapshot_history"
         self._attr_native_value = 0
 
-    def _opts(self) -> tuple[bool, str, int]:
+    def _apply(self, photos: Any, clips: Any) -> None:
         o = self._entry.options
-        return (
-            o.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED),
-            o.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER),
-            int(o.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)),
-        )
-
-    def _apply(self, stats: Any) -> None:
-        enabled, folder, max_mb = self._opts()
-        self._attr_native_value = stats.count if stats else 0
+        folder = o.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)
+        newest = max((s.newest for s in (photos, clips) if s and s.newest), default=None)
+        oldest = min((s.oldest for s in (photos, clips) if s and s.oldest), default=None)
+        self._attr_native_value = photos.count if photos else 0
         self._attr_extra_state_attributes = {
-            "enabled": enabled,
+            "enabled": o.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED),
             "folder": f"media/{folder}",
-            "size_mb": round((stats.size_bytes if stats else 0) / 1048576, 2),
-            "limit_mb": max_mb,
-            "oldest": dt_util.utc_from_timestamp(stats.oldest).isoformat() if stats and stats.oldest else None,
-            "newest": dt_util.utc_from_timestamp(stats.newest).isoformat() if stats and stats.newest else None,
+            "size_mb": round((photos.size_bytes if photos else 0) / 1048576, 2),
+            "limit_mb": int(o.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)),
+            "motion_photos": o.get(CONF_MOTION_SNAPSHOTS, DEFAULT_MOTION_SNAPSHOTS),
+            "clips": clips.count if clips else 0,
+            "clips_size_mb": round((clips.size_bytes if clips else 0) / 1048576, 2),
+            "clips_limit_mb": int(o.get(CONF_VIDEO_MAX_MB, DEFAULT_VIDEO_MAX_MB)),
+            "video_enabled": o.get(CONF_VIDEO_ENABLED, DEFAULT_VIDEO_ENABLED),
+            "oldest": dt_util.utc_from_timestamp(oldest).isoformat() if oldest else None,
+            "newest": dt_util.utc_from_timestamp(newest).isoformat() if newest else None,
         }
 
-    async def async_added_to_hass(self) -> None:
-        _enabled, folder, _mb = self._opts()
-        stats = None
+    async def _async_refresh(self) -> None:
+        folder = self._entry.options.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)
+        photos = clips = None
         if valid_folder(folder):
-            stats = await self.hass.async_add_executor_job(scan, os.path.join(media_root(self.hass), folder))
-        self._apply(stats)
+            photos, clips = await self.hass.async_add_executor_job(
+                scan_all, os.path.join(media_root(self.hass), folder)
+            )
+        self._apply(photos, clips)
+
+    async def async_added_to_hass(self) -> None:
+        await self._async_refresh()
         self.async_on_remove(
             async_dispatcher_connect(self.hass, f"{SIGNAL_HISTORY}_{self._entry_id}", self._handle)
         )
 
     @callback
-    def _handle(self, stats: Any) -> None:
-        self._apply(stats)
-        self.async_write_ha_state()
+    def _handle(self, *_args: Any) -> None:
+        async def _update() -> None:
+            await self._async_refresh()
+            self.async_write_ha_state()
+
+        self.hass.async_create_task(_update(), "qubo history refresh")

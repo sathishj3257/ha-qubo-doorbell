@@ -20,11 +20,17 @@ from .const import (
     CONF_HISTORY_MAX_MB,
     CONF_MOTION_COOLDOWN,
     CONF_MOTION_SNAPSHOTS,
+    CONF_VIDEO_ENABLED,
+    CONF_VIDEO_MAX_MB,
+    CONF_VIDEO_SECONDS,
     DEFAULT_HISTORY_ENABLED,
     DEFAULT_HISTORY_FOLDER,
     DEFAULT_HISTORY_MAX_MB,
     DEFAULT_MOTION_COOLDOWN,
     DEFAULT_MOTION_SNAPSHOTS,
+    DEFAULT_VIDEO_ENABLED,
+    DEFAULT_VIDEO_MAX_MB,
+    DEFAULT_VIDEO_SECONDS,
     DOMAIN,
 )
 from .history import valid_folder
@@ -124,6 +130,13 @@ class QuboOptionsFlow(OptionsFlow):
                 vol.Required(CONF_MOTION_SNAPSHOTS, default=o.get(CONF_MOTION_SNAPSHOTS, DEFAULT_MOTION_SNAPSHOTS)): bool,
                 vol.Required(CONF_MOTION_COOLDOWN, default=o.get(CONF_MOTION_COOLDOWN, DEFAULT_MOTION_COOLDOWN)): vol.All(
                     vol.Coerce(int), vol.Range(min=10, max=3600)
+                ),
+                vol.Required(CONF_VIDEO_ENABLED, default=o.get(CONF_VIDEO_ENABLED, DEFAULT_VIDEO_ENABLED)): bool,
+                vol.Required(CONF_VIDEO_SECONDS, default=o.get(CONF_VIDEO_SECONDS, DEFAULT_VIDEO_SECONDS)): vol.All(
+                    vol.Coerce(int), vol.Range(min=5, max=60)
+                ),
+                vol.Required(CONF_VIDEO_MAX_MB, default=o.get(CONF_VIDEO_MAX_MB, DEFAULT_VIDEO_MAX_MB)): vol.All(
+                    vol.Coerce(int), vol.Range(min=50, max=100000)
                 ),
             }
         )

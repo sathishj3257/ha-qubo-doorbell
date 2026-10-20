@@ -31,13 +31,16 @@
     "step": {
       "init": {
         "title": "Snapshot history",
-        "description": "Save visitor photos into Media, in dated folders. Ring photos come from Qubo. Motion photos are grabbed from the live stream when the doorbell reports motion or a person (this briefly opens the stream, so it is skipped while the Qubo app is viewing). When the folder grows past the size limit, the oldest photos are deleted automatically.",
+        "description": "Save visitor photos and short clips into Media, in dated folders. Ring photos come from Qubo. Motion/person photos and clips are recorded from the live stream when the doorbell reports motion or a person (this briefly opens the stream, so it is skipped during a ring and while the Qubo app is viewing). Photos and clips have separate size limits; when one is exceeded, its oldest files are deleted automatically.",
         "data": {
           "history_enabled": "Save snapshot history",
           "history_folder": "Folder name (inside Media)",
-          "history_max_mb": "Size limit (MB)",
+          "history_max_mb": "Photo size limit (MB)",
           "motion_snapshots": "Also save motion / person photos",
-          "motion_cooldown": "Minimum gap between motion photos (seconds)"
+          "motion_cooldown": "Minimum gap between motion photos (seconds)",
+          "video_enabled": "Also save short video clips on motion / person",
+          "video_seconds": "Clip length (seconds)",
+          "video_max_mb": "Video size limit (MB)"
         }
       }
     },

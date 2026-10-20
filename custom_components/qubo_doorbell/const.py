@@ -29,3 +29,11 @@ DEFAULT_MOTION_COOLDOWN = 60
 MOTION_CAUSES = {"MOTION_DETECTED": "motion", "PERSON_DETECTED": "person"}
 # Skip a motion grab if the Qubo app was streaming within this many seconds
 VIEWER_GRACE = 30
+
+# Video clips (recorded from the same live-stream session on motion/person)
+CONF_VIDEO_ENABLED = "video_enabled"
+CONF_VIDEO_SECONDS = "video_seconds"
+CONF_VIDEO_MAX_MB = "video_max_mb"
+DEFAULT_VIDEO_ENABLED = False
+DEFAULT_VIDEO_SECONDS = 15
+DEFAULT_VIDEO_MAX_MB = 500
