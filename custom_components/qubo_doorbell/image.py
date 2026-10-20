@@ -17,24 +17,12 @@ from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import (
-    CONF_HISTORY_ENABLED,
-    CONF_HISTORY_FOLDER,
-    CONF_HISTORY_MAX_MB,
-    DEFAULT_HISTORY_ENABLED,
-    DEFAULT_HISTORY_FOLDER,
-    DEFAULT_HISTORY_MAX_MB,
-    DOMAIN,
-    RING_SNAPSHOT_WINDOW,
-    SIGNAL_EVENT,
-    SIGNAL_HISTORY,
-    SNAPSHOT_KEYS,
-)
-from .history import media_root, save_and_prune, valid_folder
+from .const import DOMAIN, RING_SNAPSHOT_WINDOW, SIGNAL_EVENT, SNAPSHOT_KEYS
+from .history import async_save_to_history
 from .entity import QuboEntity, is_camera_like
 
 _LOGGER = logging.getLogger(__name__)
@@ -139,26 +127,5 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         self._attr_extra_state_attributes = {"captured_at": self._attr_image_last_updated.isoformat(), "kind": kind}
         self.async_write_ha_state()
         _LOGGER.info("Stored new Qubo visitor snapshot (%s, %d bytes)", kind, len(data))
-        await self._async_save_history(data, ctype, kind)
-
-    async def _async_save_history(self, data: bytes, ctype: str, kind: str) -> None:
-        entry = self.hass.config_entries.async_get_entry(self._entry_id)
-        opts = entry.options if entry else {}
-        if not opts.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED):
-            return
-        folder = opts.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)
-        if not valid_folder(folder):
-            _LOGGER.warning("Qubo history folder name %r is not allowed; skipping", folder)
-            return
-        base = os.path.join(media_root(self.hass), folder)
-        max_bytes = int(opts.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)) * 1024 * 1024
         ext = "png" if ctype == "image/png" else "jpg"
-        try:
-            path, stats = await self.hass.async_add_executor_job(
-                save_and_prune, base, data, ext, kind, dt_util.now(), max_bytes
-            )
-        except OSError as err:
-            _LOGGER.warning("Could not save Qubo snapshot to history: %s", err)
-            return
-        _LOGGER.info("Saved %s to history (%d photos, %.1f MB, %d old deleted)", path, stats.count, stats.size_bytes / 1048576, stats.deleted)
-        async_dispatcher_send(self.hass, f"{SIGNAL_HISTORY}_{self._entry_id}", stats)
+        await async_save_to_history(self.hass, self._entry_id, data, ext, kind)

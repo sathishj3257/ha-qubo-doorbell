@@ -6,7 +6,23 @@ from datetime import datetime
 import os
 import re
 
+import logging
+
 from homeassistant.core import HomeAssistant
+from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CONF_HISTORY_ENABLED,
+    CONF_HISTORY_FOLDER,
+    CONF_HISTORY_MAX_MB,
+    DEFAULT_HISTORY_ENABLED,
+    DEFAULT_HISTORY_FOLDER,
+    DEFAULT_HISTORY_MAX_MB,
+    SIGNAL_HISTORY,
+)
+
+_LOGGER = logging.getLogger(__name__)
 
 FOLDER_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9 _.-]{0,63}$")
 IMAGE_EXT = (".jpg", ".jpeg", ".png")
@@ -100,3 +116,30 @@ def save_and_prune(base: str, data: bytes, ext: str, kind: str, when: datetime, 
     stats = scan(base)
     stats.deleted = deleted
     return path, stats
+
+
+async def async_save_to_history(hass: HomeAssistant, entry_id: str, data: bytes, ext: str, kind: str) -> str | None:
+    """Save one photo if history is enabled in the entry options; notify the history sensor."""
+    entry = hass.config_entries.async_get_entry(entry_id)
+    opts = entry.options if entry else {}
+    if not opts.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED):
+        return None
+    folder = opts.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)
+    if not valid_folder(folder):
+        _LOGGER.warning("Qubo history folder name %r is not allowed; skipping", folder)
+        return None
+    base = os.path.join(media_root(hass), folder)
+    max_bytes = int(opts.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)) * 1024 * 1024
+    try:
+        path, stats = await hass.async_add_executor_job(
+            save_and_prune, base, data, ext, kind, dt_util.now(), max_bytes
+        )
+    except OSError as err:
+        _LOGGER.warning("Could not save Qubo snapshot to history: %s", err)
+        return None
+    _LOGGER.info(
+        "Saved %s to history (%d photos, %.1f MB, %d old deleted)",
+        path, stats.count, stats.size_bytes / 1048576, stats.deleted,
+    )
+    async_dispatcher_send(hass, f"{SIGNAL_HISTORY}_{entry_id}", stats)
+    return path

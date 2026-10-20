@@ -12,11 +12,13 @@ from homeassistant.const import CONF_EMAIL, CONF_PASSWORD, Platform
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.exceptions import ConfigEntryAuthFailed, ConfigEntryNotReady
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.dispatcher import async_dispatcher_send
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.event import async_track_time_interval
 from qubopy import QuboAuth, QuboAuthError, QuboClient, QuboConnectionError, QuboMqttListener
 
 from .const import CONF_DEVICE_ID, DOMAIN, EVENT_QUBO, MAX_EVENT_LOG, SIGNAL_EVENT
+from .entity import is_camera_like
+from .motion import MotionCapture
 
 _LOGGER = logging.getLogger(__name__)
 PLATFORMS = [Platform.SENSOR, Platform.BINARY_SENSOR, Platform.IMAGE]
@@ -105,6 +107,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = rt
     entry.async_on_unload(entry.add_update_listener(_async_options_updated))
+    for d in devices:
+        if is_camera_like(d) and hasattr(d, "start_stream"):
+            cap = MotionCapture(hass, entry, d)
+            entry.async_on_unload(async_dispatcher_connect(hass, f"{SIGNAL_EVENT}_{entry.entry_id}", cap.handle))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _LOGGER.info(
         "Qubo connected: %d device(s): %s",

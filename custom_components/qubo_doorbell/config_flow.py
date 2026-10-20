@@ -18,9 +18,13 @@ from .const import (
     CONF_HISTORY_ENABLED,
     CONF_HISTORY_FOLDER,
     CONF_HISTORY_MAX_MB,
+    CONF_MOTION_COOLDOWN,
+    CONF_MOTION_SNAPSHOTS,
     DEFAULT_HISTORY_ENABLED,
     DEFAULT_HISTORY_FOLDER,
     DEFAULT_HISTORY_MAX_MB,
+    DEFAULT_MOTION_COOLDOWN,
+    DEFAULT_MOTION_SNAPSHOTS,
     DOMAIN,
 )
 from .history import valid_folder
@@ -116,6 +120,10 @@ class QuboOptionsFlow(OptionsFlow):
                 vol.Required(CONF_HISTORY_FOLDER, default=o.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)): str,
                 vol.Required(CONF_HISTORY_MAX_MB, default=o.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)): vol.All(
                     vol.Coerce(int), vol.Range(min=10, max=100000)
+                ),
+                vol.Required(CONF_MOTION_SNAPSHOTS, default=o.get(CONF_MOTION_SNAPSHOTS, DEFAULT_MOTION_SNAPSHOTS)): bool,
+                vol.Required(CONF_MOTION_COOLDOWN, default=o.get(CONF_MOTION_COOLDOWN, DEFAULT_MOTION_COOLDOWN)): vol.All(
+                    vol.Coerce(int), vol.Range(min=10, max=3600)
                 ),
             }
         )

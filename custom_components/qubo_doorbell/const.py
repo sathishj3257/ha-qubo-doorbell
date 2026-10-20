@@ -20,3 +20,12 @@ SIGNAL_HISTORY = f"{DOMAIN}_history"
 RING_SNAPSHOT_WINDOW = 90
 # Event parameter keys that may carry a photo link
 SNAPSHOT_KEYS = ("snapshotUrl", "imageUrl", "thumbnailUrl", "snapshot_url", "image_url", "thumbUrl")
+
+# Motion photos (grabbed from the live stream when the doorbell reports motion/person)
+CONF_MOTION_SNAPSHOTS = "motion_snapshots"
+CONF_MOTION_COOLDOWN = "motion_cooldown"
+DEFAULT_MOTION_SNAPSHOTS = False
+DEFAULT_MOTION_COOLDOWN = 60
+MOTION_CAUSES = {"MOTION_DETECTED": "motion", "PERSON_DETECTED": "person"}
+# Skip a motion grab if the Qubo app was streaming within this many seconds
+VIEWER_GRACE = 30

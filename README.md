@@ -11,7 +11,7 @@ sensor, **motion** events, and the **visitor snapshot** that Qubo uploads when s
 
 | Device | Model | Status |
 |---|---|---|
-| Qubo Video Doorbell Pro | HCD04C | ✅ ring, snapshot, events |
+| Qubo Video Doorbell Pro | HCD04C | ✅ ring, snapshot, motion photo, events |
 
 Other Qubo cameras/doorbells (HCD01, HCP, HCO series) may work for events; reports welcome.
 
@@ -55,10 +55,17 @@ Settings → Devices & services → **Qubo Doorbell** → **Configure**:
 | Save snapshot history | off | Keep a copy of every visitor photo (ring and motion) |
 | Folder name (inside Media) | `qubo_doorbell` | A single folder name under Home Assistant's media folder |
 | Size limit (MB) | 100 | When the folder grows past this, the **oldest photos are deleted automatically** |
+| Also save motion / person photos | off | On motion/person alerts, grab one frame from the live stream (see below) |
+| Minimum gap between motion photos (seconds) | 60 | At most one motion photo per this many seconds |
 
-Photos are saved as `media/<folder>/<YYYY-MM-DD>/<HH-MM-SS> ring.jpg` (or `motion.jpg`) and can be browsed
-in **Media → My media**. A photo that arrives within 90 s of a button press is labelled `ring`; any other
-photo is labelled `motion`.
+Photos are saved as `media/<folder>/<YYYY-MM-DD>/<HH-MM-SS> <kind>.jpg`, where kind is `ring`, `motion`
+or `person`, and can be browsed in **Media → My media**.
+
+**How motion photos work.** Qubo's motion/person alerts don't include a downloadable photo (only a file
+path on the doorbell), so the integration briefly opens Qubo's cloud live stream, grabs one frame with
+`ffmpeg` (≈ 8–10 s after the alert), and closes the stream. It skips the grab during a ring (the ring
+already gives a photo) and while the Qubo app was viewing in the last 30 s, because Qubo's cloud stream
+allows only one viewer.
 
 Every real-time event is also fired on the Home Assistant bus as **`qubo_event`**, so you can trigger
 automations on anything the doorbell sends.
