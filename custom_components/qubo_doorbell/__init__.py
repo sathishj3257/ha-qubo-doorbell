@@ -104,6 +104,7 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
     entry.async_on_unload(async_track_time_interval(hass, _keep_token_fresh, timedelta(minutes=20)))
 
     hass.data.setdefault(DOMAIN, {})[entry.entry_id] = rt
+    entry.async_on_unload(entry.add_update_listener(_async_options_updated))
     await hass.config_entries.async_forward_entry_setups(entry, PLATFORMS)
     _LOGGER.info(
         "Qubo connected: %d device(s): %s",
@@ -111,6 +112,10 @@ async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry) -> bool:
         ", ".join(f"{d.info.name} ({d.info.model})" for d in devices),
     )
     return True
+
+
+async def _async_options_updated(hass: HomeAssistant, entry: ConfigEntry) -> None:
+    await hass.config_entries.async_reload(entry.entry_id)
 
 
 async def async_remove_config_entry_device(hass: HomeAssistant, entry: ConfigEntry, device: Any) -> bool:

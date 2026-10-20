@@ -44,6 +44,21 @@ there revokes access (Home Assistant will then ask you to sign in again).
 | `binary_sensor.<name>_motion` | Pulses on motion / person events (if enabled in the Qubo app) |
 | `image.<name>_last_visitor` | Photo of the most recent visitor — downloaded and stored locally (`config/qubo_doorbell/`), so it survives link expiry and restarts until the next ring replaces it |
 | `sensor.<name>_last_event` | The latest raw event (`service / event`) with parameters as attributes — handy for debugging |
+| `sensor.<name>_snapshot_history` | Number of photos kept in the snapshot history; size, limit, folder, oldest/newest as attributes |
+
+## Snapshot history (optional, off by default)
+
+Settings → Devices & services → **Qubo Doorbell** → **Configure**:
+
+| Option | Default | Meaning |
+|---|---|---|
+| Save snapshot history | off | Keep a copy of every visitor photo (ring and motion) |
+| Folder name (inside Media) | `qubo_doorbell` | A single folder name under Home Assistant's media folder |
+| Size limit (MB) | 100 | When the folder grows past this, the **oldest photos are deleted automatically** |
+
+Photos are saved as `media/<folder>/<YYYY-MM-DD>/<HH-MM-SS> ring.jpg` (or `motion.jpg`) and can be browsed
+in **Media → My media**. A photo that arrives within 90 s of a button press is labelled `ring`; any other
+photo is labelled `motion`.
 
 Every real-time event is also fired on the Home Assistant bus as **`qubo_event`**, so you can trigger
 automations on anything the doorbell sends.
@@ -66,6 +81,7 @@ adds the visitor photo a few seconds later.
 - Your Qubo email/password are stored in Home Assistant's config entry (like other cloud integrations) and are
   sent only to Qubo's servers by qubopy.
 - The last visitor photo is saved in `config/qubo_doorbell/` (not in `www`, so it is not publicly served).
+- Snapshot history (if enabled) goes into the media folder, which only signed-in Home Assistant users can open.
 - Snapshot links are pre-signed, expiring URLs from Qubo's storage. Anyone holding a link can open it until it
   expires — don't post them publicly.
 - The integration only subscribes to Qubo's `monitor` MQTT topics (no control channel).

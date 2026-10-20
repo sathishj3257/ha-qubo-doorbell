@@ -10,17 +10,31 @@ from __future__ import annotations
 from datetime import datetime, timezone
 import logging
 import os
+import time
 from typing import Any
 
 from homeassistant.components.image import ImageEntity
 from homeassistant.config_entries import ConfigEntry
 from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
-from homeassistant.helpers.dispatcher import async_dispatcher_connect
+from homeassistant.helpers.dispatcher import async_dispatcher_connect, async_dispatcher_send
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 from homeassistant.util import dt as dt_util
 
-from .const import DOMAIN, SIGNAL_EVENT
+from .const import (
+    CONF_HISTORY_ENABLED,
+    CONF_HISTORY_FOLDER,
+    CONF_HISTORY_MAX_MB,
+    DEFAULT_HISTORY_ENABLED,
+    DEFAULT_HISTORY_FOLDER,
+    DEFAULT_HISTORY_MAX_MB,
+    DOMAIN,
+    RING_SNAPSHOT_WINDOW,
+    SIGNAL_EVENT,
+    SIGNAL_HISTORY,
+    SNAPSHOT_KEYS,
+)
+from .history import media_root, save_and_prune, valid_folder
 from .entity import QuboEntity, is_camera_like
 
 _LOGGER = logging.getLogger(__name__)
@@ -68,6 +82,7 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         self._attr_unique_id = f"{self._uuid}_last_visitor"
         self._path = hass.config.path(DOMAIN, f"{self._uuid}_last_visitor.jpg")
         self._image: bytes | None = None
+        self._last_ring = 0.0
         self._attr_extra_state_attributes = {}
 
     async def async_added_to_hass(self) -> None:
@@ -87,13 +102,18 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
 
     @callback
     def _handle(self, data: dict[str, Any]) -> None:
-        if data["device_uuid"] != self._uuid or data.get("event_name") != "snapshotAvailable":
+        if data["device_uuid"] != self._uuid:
             return
-        url = (data.get("parameters") or {}).get("snapshotUrl")
-        if url:
-            self.hass.async_create_task(self._async_store(url), f"{DOMAIN} snapshot download")
+        if data.get("service") == "doorbell" and data.get("event_name") == "doorbellPressed":
+            self._last_ring = time.monotonic()
+        params = data.get("parameters") or {}
+        url = next((params[k] for k in SNAPSHOT_KEYS if isinstance(params.get(k), str) and params[k].startswith("http")), None)
+        if not url:
+            return
+        kind = "ring" if time.monotonic() - self._last_ring < RING_SNAPSHOT_WINDOW else "motion"
+        self.hass.async_create_task(self._async_store(url, kind), f"{DOMAIN} snapshot download")
 
-    async def _async_store(self, url: str) -> None:
+    async def _async_store(self, url: str, kind: str = "ring") -> None:
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, timeout=30) as resp:
@@ -116,6 +136,29 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         self._image = data
         self._attr_content_type = ctype
         self._attr_image_last_updated = dt_util.utcnow()
-        self._attr_extra_state_attributes = {"captured_at": self._attr_image_last_updated.isoformat()}
+        self._attr_extra_state_attributes = {"captured_at": self._attr_image_last_updated.isoformat(), "kind": kind}
         self.async_write_ha_state()
-        _LOGGER.info("Stored new Qubo visitor snapshot (%d bytes)", len(data))
+        _LOGGER.info("Stored new Qubo visitor snapshot (%s, %d bytes)", kind, len(data))
+        await self._async_save_history(data, ctype, kind)
+
+    async def _async_save_history(self, data: bytes, ctype: str, kind: str) -> None:
+        entry = self.hass.config_entries.async_get_entry(self._entry_id)
+        opts = entry.options if entry else {}
+        if not opts.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED):
+            return
+        folder = opts.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)
+        if not valid_folder(folder):
+            _LOGGER.warning("Qubo history folder name %r is not allowed; skipping", folder)
+            return
+        base = os.path.join(media_root(self.hass), folder)
+        max_bytes = int(opts.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)) * 1024 * 1024
+        ext = "png" if ctype == "image/png" else "jpg"
+        try:
+            path, stats = await self.hass.async_add_executor_job(
+                save_and_prune, base, data, ext, kind, dt_util.now(), max_bytes
+            )
+        except OSError as err:
+            _LOGGER.warning("Could not save Qubo snapshot to history: %s", err)
+            return
+        _LOGGER.info("Saved %s to history (%d photos, %.1f MB, %d old deleted)", path, stats.count, stats.size_bytes / 1048576, stats.deleted)
+        async_dispatcher_send(self.hass, f"{SIGNAL_HISTORY}_{self._entry_id}", stats)

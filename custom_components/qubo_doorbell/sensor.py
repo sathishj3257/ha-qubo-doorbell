@@ -10,13 +10,32 @@ from homeassistant.core import HomeAssistant, callback
 from homeassistant.helpers.dispatcher import async_dispatcher_connect
 from homeassistant.helpers.entity_platform import AddEntitiesCallback
 
-from .const import DOMAIN, SIGNAL_EVENT
-from .entity import QuboEntity
+import os
+
+from homeassistant.util import dt as dt_util
+
+from .const import (
+    CONF_HISTORY_ENABLED,
+    CONF_HISTORY_FOLDER,
+    CONF_HISTORY_MAX_MB,
+    DEFAULT_HISTORY_ENABLED,
+    DEFAULT_HISTORY_FOLDER,
+    DEFAULT_HISTORY_MAX_MB,
+    DOMAIN,
+    SIGNAL_EVENT,
+    SIGNAL_HISTORY,
+)
+from .entity import QuboEntity, is_camera_like
+from .history import media_root, scan, valid_folder
 
 
 async def async_setup_entry(hass: HomeAssistant, entry: ConfigEntry, async_add_entities: AddEntitiesCallback) -> None:
     rt = hass.data[DOMAIN][entry.entry_id]
-    async_add_entities(QuboLastEventSensor(entry.entry_id, d) for d in rt.devices)
+    ents: list[SensorEntity] = [QuboLastEventSensor(entry.entry_id, d) for d in rt.devices]
+    cams = [d for d in rt.devices if is_camera_like(d)]
+    if cams:
+        ents.append(QuboHistorySensor(entry, cams[0]))
+    async_add_entities(ents)
 
 
 class QuboLastEventSensor(QuboEntity, SensorEntity):
@@ -49,4 +68,53 @@ class QuboLastEventSensor(QuboEntity, SensorEntity):
             "parameters": data.get("parameters"),
             "received_at": datetime.fromtimestamp(data["received"], timezone.utc).isoformat(),
         }
+        self.async_write_ha_state()
+
+
+class QuboHistorySensor(QuboEntity, SensorEntity):
+    """Number of photos kept in the snapshot history (size and settings as attributes)."""
+
+    _attr_name = "Snapshot history"
+    _attr_icon = "mdi:image-multiple-outline"
+    _attr_native_unit_of_measurement = "photos"
+
+    def __init__(self, entry: ConfigEntry, device: Any) -> None:
+        super().__init__(entry.entry_id, device)
+        self._entry = entry
+        self._attr_unique_id = f"{entry.entry_id}_snapshot_history"
+        self._attr_native_value = 0
+
+    def _opts(self) -> tuple[bool, str, int]:
+        o = self._entry.options
+        return (
+            o.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED),
+            o.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER),
+            int(o.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)),
+        )
+
+    def _apply(self, stats: Any) -> None:
+        enabled, folder, max_mb = self._opts()
+        self._attr_native_value = stats.count if stats else 0
+        self._attr_extra_state_attributes = {
+            "enabled": enabled,
+            "folder": f"media/{folder}",
+            "size_mb": round((stats.size_bytes if stats else 0) / 1048576, 2),
+            "limit_mb": max_mb,
+            "oldest": dt_util.utc_from_timestamp(stats.oldest).isoformat() if stats and stats.oldest else None,
+            "newest": dt_util.utc_from_timestamp(stats.newest).isoformat() if stats and stats.newest else None,
+        }
+
+    async def async_added_to_hass(self) -> None:
+        _enabled, folder, _mb = self._opts()
+        stats = None
+        if valid_folder(folder):
+            stats = await self.hass.async_add_executor_job(scan, os.path.join(media_root(self.hass), folder))
+        self._apply(stats)
+        self.async_on_remove(
+            async_dispatcher_connect(self.hass, f"{SIGNAL_HISTORY}_{self._entry_id}", self._handle)
+        )
+
+    @callback
+    def _handle(self, stats: Any) -> None:
+        self._apply(stats)
         self.async_write_ha_state()

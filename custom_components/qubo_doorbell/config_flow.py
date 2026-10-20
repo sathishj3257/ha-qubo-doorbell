@@ -7,12 +7,23 @@ import uuid
 
 import voluptuous as vol
 
-from homeassistant.config_entries import ConfigFlow, ConfigFlowResult
+from homeassistant.config_entries import ConfigEntry, ConfigFlow, ConfigFlowResult, OptionsFlow
 from homeassistant.const import CONF_EMAIL, CONF_PASSWORD
+from homeassistant.core import callback
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 from qubopy import QuboAuth, QuboAuthError, QuboClient, QuboConnectionError
 
-from .const import CONF_DEVICE_ID, DOMAIN
+from .const import (
+    CONF_DEVICE_ID,
+    CONF_HISTORY_ENABLED,
+    CONF_HISTORY_FOLDER,
+    CONF_HISTORY_MAX_MB,
+    DEFAULT_HISTORY_ENABLED,
+    DEFAULT_HISTORY_FOLDER,
+    DEFAULT_HISTORY_MAX_MB,
+    DOMAIN,
+)
+from .history import valid_folder
 
 SCHEMA = vol.Schema({vol.Required(CONF_EMAIL): str, vol.Required(CONF_PASSWORD): str})
 
@@ -29,6 +40,11 @@ class QuboDoorbellConfigFlow(ConfigFlow, domain=DOMAIN):
     """Ask for the Qubo account email and password."""
 
     VERSION = 1
+
+    @staticmethod
+    @callback
+    def async_get_options_flow(config_entry: ConfigEntry) -> OptionsFlow:
+        return QuboOptionsFlow()
 
     async def async_step_user(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
         errors: dict[str, str] = {}
@@ -80,3 +96,27 @@ class QuboDoorbellConfigFlow(ConfigFlow, domain=DOMAIN):
             data_schema=vol.Schema({vol.Required(CONF_PASSWORD): str}),
             errors=errors,
         )
+
+
+class QuboOptionsFlow(OptionsFlow):
+    """Snapshot history settings."""
+
+    async def async_step_init(self, user_input: dict[str, Any] | None = None) -> ConfigFlowResult:
+        errors: dict[str, str] = {}
+        if user_input is not None:
+            user_input[CONF_HISTORY_FOLDER] = user_input[CONF_HISTORY_FOLDER].strip()
+            if not valid_folder(user_input[CONF_HISTORY_FOLDER]):
+                errors[CONF_HISTORY_FOLDER] = "invalid_folder"
+            else:
+                return self.async_create_entry(data=user_input)
+        o = {**self.config_entry.options, **(user_input or {})}
+        schema = vol.Schema(
+            {
+                vol.Required(CONF_HISTORY_ENABLED, default=o.get(CONF_HISTORY_ENABLED, DEFAULT_HISTORY_ENABLED)): bool,
+                vol.Required(CONF_HISTORY_FOLDER, default=o.get(CONF_HISTORY_FOLDER, DEFAULT_HISTORY_FOLDER)): str,
+                vol.Required(CONF_HISTORY_MAX_MB, default=o.get(CONF_HISTORY_MAX_MB, DEFAULT_HISTORY_MAX_MB)): vol.All(
+                    vol.Coerce(int), vol.Range(min=10, max=100000)
+                ),
+            }
+        )
+        return self.async_show_form(step_id="init", data_schema=schema, errors=errors)

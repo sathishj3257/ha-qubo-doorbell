@@ -4,12 +4,17 @@
       "user": {
         "title": "Qubo account",
         "description": "Sign in with the email and password you use in the Qubo app. The session appears in the Qubo app as \"Home Assistant\".",
-        "data": {"email": "Email", "password": "Password"}
+        "data": {
+          "email": "Email",
+          "password": "Password"
+        }
       },
       "reauth_confirm": {
         "title": "Qubo sign-in expired",
         "description": "Enter your Qubo password again.",
-        "data": {"password": "Password"}
+        "data": {
+          "password": "Password"
+        }
       }
     },
     "error": {
@@ -20,6 +25,22 @@
     "abort": {
       "already_configured": "This Qubo account is already added.",
       "reauth_successful": "Signed in again."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "Snapshot history",
+        "description": "Save every visitor photo (ring and motion) into Media, in dated folders. When the folder grows past the size limit, the oldest photos are deleted automatically.",
+        "data": {
+          "history_enabled": "Save snapshot history",
+          "history_folder": "Folder name (inside Media)",
+          "history_max_mb": "Size limit (MB)"
+        }
+      }
+    },
+    "error": {
+      "invalid_folder": "Use a single folder name: letters, numbers, spaces, - _ . (no slashes)."
     }
   }
 }
