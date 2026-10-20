@@ -1,0 +1,15 @@
+{
+  "domain": "qubo_doorbell",
+  "name": "Qubo Doorbell (qubopy)",
+  "codeowners": [
+    "@sathishj3257"
+  ],
+  "config_flow": true,
+  "documentation": "https://github.com/sathishj3257/ha-qubo-doorbell",
+  "iot_class": "cloud_push",
+  "issue_tracker": "https://github.com/sathishj3257/ha-qubo-doorbell/issues",
+  "requirements": [
+    "qubopy[mqtt]==0.2.0"
+  ],
+  "version": "0.1.0"
+}

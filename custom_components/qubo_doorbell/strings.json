@@ -1,0 +1,25 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Qubo account",
+        "description": "Sign in with the email and password you use in the Qubo app. The session appears in the Qubo app as \"Home Assistant\".",
+        "data": {"email": "Email", "password": "Password"}
+      },
+      "reauth_confirm": {
+        "title": "Qubo sign-in expired",
+        "description": "Enter your Qubo password again.",
+        "data": {"password": "Password"}
+      }
+    },
+    "error": {
+      "invalid_auth": "Email or password is wrong.",
+      "cannot_connect": "Could not reach the Qubo cloud.",
+      "unknown": "Unexpected error, check the logs."
+    },
+    "abort": {
+      "already_configured": "This Qubo account is already added.",
+      "reauth_successful": "Signed in again."
+    }
+  }
+}

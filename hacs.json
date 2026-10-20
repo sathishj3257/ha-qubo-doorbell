@@ -1,0 +1,5 @@
+{
+  "name": "Qubo Doorbell",
+  "render_readme": true,
+  "homeassistant": "2025.1.0"
+}

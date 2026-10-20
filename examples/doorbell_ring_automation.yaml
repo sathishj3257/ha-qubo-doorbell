@@ -1,0 +1,42 @@
+# Example: alert phones when the doorbell is pressed, then add the visitor photo.
+# Replace notify.mobile_app_YOUR_PHONE with your own notify service.
+alias: Doorbell ring
+mode: single
+max_exceeded: silent
+triggers:
+  - trigger: event
+    event_type: qubo_event
+    event_data:
+      service: doorbell
+      event_name: doorbellPressed
+actions:
+  - action: notify.mobile_app_YOUR_PHONE
+    data:
+      title: "🔔 Someone's at the door"
+      message: "Front door · {{ now().strftime('%-I:%M %p') }}"
+      data:
+        tag: doorbell
+        importance: high
+        ttl: 0
+        priority: high
+  - wait_for_trigger:
+      - trigger: event
+        event_type: qubo_event
+        event_data:
+          service: call
+          event_name: snapshotAvailable
+    timeout: { seconds: 25 }
+    continue_on_timeout: true
+  - if:
+      - condition: template
+        value_template: "{{ wait.trigger is not none }}"
+    then:
+      - action: notify.mobile_app_YOUR_PHONE
+        data:
+          title: "🔔 Someone's at the door"
+          message: "Front door"
+          data:
+            tag: doorbell
+            alert_once: true
+            image: "{{ wait.trigger.event.data.parameters.snapshotUrl }}"
+  - delay: { seconds: 20 }
