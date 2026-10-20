@@ -39,6 +39,14 @@ def _read_file(path: str) -> tuple[bytes, float] | None:
         return f.read(), os.path.getmtime(path)
 
 
+def _sniff_image_type(data: bytes) -> str | None:
+    if data[:3] == b"\xff\xd8\xff":
+        return "image/jpeg"
+    if data[:8] == b"\x89PNG\r\n\x1a\n":
+        return "image/png"
+    return None
+
+
 def _write_file(path: str, data: bytes) -> None:
     os.makedirs(os.path.dirname(path), exist_ok=True)
     tmp = f"{path}.tmp"
@@ -67,6 +75,7 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         stored = await self.hass.async_add_executor_job(_read_file, self._path)
         if stored:
             self._image, mtime = stored
+            self._attr_content_type = _sniff_image_type(self._image) or "image/jpeg"
             self._attr_image_last_updated = datetime.fromtimestamp(mtime, timezone.utc)
             self._attr_extra_state_attributes = {"captured_at": self._attr_image_last_updated.isoformat()}
         self.async_on_remove(
@@ -88,9 +97,8 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         session = async_get_clientsession(self.hass)
         try:
             async with session.get(url, timeout=30) as resp:
-                ctype = resp.headers.get("Content-Type", "")
-                if resp.status != 200 or not ctype.startswith("image/"):
-                    _LOGGER.warning("Qubo snapshot download failed (HTTP %s, %s)", resp.status, ctype)
+                if resp.status != 200:
+                    _LOGGER.warning("Qubo snapshot download failed (HTTP %s)", resp.status)
                     return
                 data = await resp.read()
         except Exception as err:  # noqa: BLE001
@@ -99,9 +107,14 @@ class QuboSnapshotImage(QuboEntity, ImageEntity):
         if not data or len(data) > MAX_IMAGE_BYTES:
             _LOGGER.warning("Qubo snapshot has unexpected size (%s bytes)", len(data or b""))
             return
+        # Qubo's storage serves photos as "binary/octet-stream", so detect the type from the bytes.
+        ctype = _sniff_image_type(data)
+        if ctype is None:
+            _LOGGER.warning("Qubo snapshot is not a JPEG/PNG image (%d bytes)", len(data))
+            return
         await self.hass.async_add_executor_job(_write_file, self._path, data)
         self._image = data
-        self._attr_content_type = ctype.split(";")[0] or "image/jpeg"
+        self._attr_content_type = ctype
         self._attr_image_last_updated = dt_util.utcnow()
         self._attr_extra_state_attributes = {"captured_at": self._attr_image_last_updated.isoformat()}
         self.async_write_ha_state()
